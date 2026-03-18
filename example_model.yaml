@@ -1,0 +1,459 @@
+name: tasty_bytes_raw_pos
+description: >
+  Point-of-sale data for Tasty Bytes food truck network.
+  Covers orders, menu items, trucks, locations, and franchises.
+
+tables:
+  # ── Fact: ORDER_HEADER ──────────────────────────────────────────────────────
+  - name: order_header
+    description: "One row per customer order. Contains order totals, channel, and timestamps."
+    base_table:
+      database: TASTY_BYTES
+      schema: RAW_POS
+      table: ORDER_HEADER
+    primary_key:
+      columns:
+        - order_id
+
+    time_dimensions:
+      - name: order_ts
+        expr: ORDER_TS
+        description: "Timestamp when the order was placed."
+        unique: false
+        data_type: timestamp
+
+    dimensions:
+      - name: order_id
+        expr: ORDER_ID
+        description: "Unique order identifier."
+        unique: true
+        data_type: number
+
+      - name: truck_id
+        expr: TRUCK_ID
+        description: "Truck that fulfilled the order."
+        unique: false
+        data_type: number
+
+      - name: location_id
+        expr: LOCATION_ID
+        description: "Location where the order was placed."
+        unique: false
+        data_type: number
+
+      - name: customer_id
+        expr: CUSTOMER_ID
+        description: "Customer who placed the order."
+        unique: false
+        data_type: number
+
+      - name: order_channel
+        expr: ORDER_CHANNEL
+        description: "Channel through which the order was placed (e.g., in-store, online, mobile app)."
+        unique: false
+        data_type: varchar
+
+      - name: order_currency
+        expr: ORDER_CURRENCY
+        description: "ISO 4217 currency code for the order."
+        unique: false
+        data_type: varchar
+
+    measures:
+      - name: order_total
+        expr: ORDER_TOTAL
+        description: "Final order total including tax and discounts in local currency."
+        default_aggregation: sum
+        data_type: number
+
+      - name: order_amount
+        expr: ORDER_AMOUNT
+        description: "Order subtotal before tax and discounts."
+        default_aggregation: sum
+        data_type: number
+
+      - name: order_count
+        expr: ORDER_ID
+        description: "Count of distinct orders."
+        default_aggregation: count_distinct
+        data_type: number
+
+  # ── Fact: ORDER_DETAIL ──────────────────────────────────────────────────────
+  - name: order_detail
+    description: "One row per line item within an order. Links orders to menu items."
+    base_table:
+      database: TASTY_BYTES
+      schema: RAW_POS
+      table: ORDER_DETAIL
+
+    dimensions:
+      - name: order_detail_id
+        expr: ORDER_DETAIL_ID
+        description: "Unique order line-item identifier."
+        unique: true
+        data_type: number
+
+      - name: order_id
+        expr: ORDER_ID
+        description: "Parent order identifier."
+        unique: false
+        data_type: number
+
+      - name: menu_item_id
+        expr: MENU_ITEM_ID
+        description: "Menu item ordered."
+        unique: false
+        data_type: number
+
+      - name: line_number
+        expr: LINE_NUMBER
+        description: "Line position within the order."
+        unique: false
+        data_type: number
+
+    measures:
+      - name: quantity
+        expr: QUANTITY
+        description: "Number of units ordered for this line item."
+        default_aggregation: sum
+        data_type: number
+
+      - name: unit_price
+        expr: UNIT_PRICE
+        description: "Per-unit price of the menu item."
+        default_aggregation: avg
+        data_type: number
+
+      - name: line_total
+        expr: PRICE
+        description: "Total price for this line item (quantity × unit_price)."
+        default_aggregation: sum
+        data_type: number
+
+      - name: items_sold
+        expr: ORDER_DETAIL_ID
+        description: "Count of distinct line items sold."
+        default_aggregation: count_distinct
+        data_type: number
+
+  # ── Dimension: MENU ─────────────────────────────────────────────────────────
+  - name: menu
+    description: "Menu catalogue: all items sold across all Tasty Bytes truck brands."
+    base_table:
+      database: TASTY_BYTES
+      schema: RAW_POS
+      table: MENU
+    primary_key:
+      columns:
+        - menu_item_id
+
+    dimensions:
+      - name: menu_item_id
+        expr: MENU_ITEM_ID
+        description: "Unique menu item identifier."
+        unique: true
+        data_type: number
+
+      - name: menu_type_id
+        expr: MENU_TYPE_ID
+        description: "Menu type identifier, links to truck brand."
+        unique: false
+        data_type: number
+
+      - name: menu_type
+        expr: MENU_TYPE
+        description: "Cuisine type of the menu (e.g., American, Asian, Mexican)."
+        unique: false
+        data_type: varchar
+
+      - name: truck_brand_name
+        expr: TRUCK_BRAND_NAME
+        description: "Name of the truck brand that serves this menu."
+        unique: false
+        data_type: varchar
+
+      - name: menu_item_name
+        expr: MENU_ITEM_NAME
+        description: "Display name of the menu item."
+        unique: false
+        data_type: varchar
+
+      - name: item_category
+        expr: ITEM_CATEGORY
+        description: "High-level category (e.g., Main, Beverage, Dessert)."
+        unique: false
+        data_type: varchar
+
+      - name: item_subcategory
+        expr: ITEM_SUBCATEGORY
+        description: "Subcategory providing further item classification."
+        unique: false
+        data_type: varchar
+
+    measures:
+      - name: sale_price_usd
+        expr: SALE_PRICE_USD
+        description: "Listed sale price of the menu item in USD."
+        default_aggregation: avg
+        data_type: number
+
+      - name: cost_of_goods_usd
+        expr: COST_OF_GOODS_USD
+        description: "Cost to produce the menu item in USD."
+        default_aggregation: avg
+        data_type: number
+
+      - name: menu_item_count
+        expr: MENU_ITEM_ID
+        description: "Count of distinct menu items."
+        default_aggregation: count_distinct
+        data_type: number
+
+  # ── Dimension: TRUCK ─────────────────────────────────────────────────────────
+  - name: truck
+    description: "Food truck fleet: vehicle details, operating region, and franchise ownership."
+    base_table:
+      database: TASTY_BYTES
+      schema: RAW_POS
+      table: TRUCK
+    primary_key:
+      columns:
+        - truck_id
+
+    time_dimensions:
+      - name: truck_opening_date
+        expr: TRUCK_OPENING_DATE
+        description: "Date the truck started operations."
+        unique: false
+        data_type: date
+
+    dimensions:
+      - name: truck_id
+        expr: TRUCK_ID
+        description: "Unique truck identifier."
+        unique: true
+        data_type: number
+
+      - name: menu_type_id
+        expr: MENU_TYPE_ID
+        description: "Menu type served by this truck."
+        unique: false
+        data_type: number
+
+      - name: franchise_id
+        expr: FRANCHISE_ID
+        description: "Franchise owner of this truck."
+        unique: false
+        data_type: number
+
+      - name: primary_city
+        expr: PRIMARY_CITY
+        description: "Primary city where the truck operates."
+        unique: false
+        data_type: varchar
+
+      - name: region
+        expr: REGION
+        description: "Region where the truck operates."
+        unique: false
+        data_type: varchar
+
+      - name: country
+        expr: COUNTRY
+        description: "Country where the truck operates."
+        unique: false
+        data_type: varchar
+
+      - name: iso_country_code
+        expr: ISO_COUNTRY_CODE
+        description: "ISO 3166-1 alpha-2 country code."
+        unique: false
+        data_type: varchar
+
+      - name: make
+        expr: MAKE
+        description: "Vehicle manufacturer (e.g., Ford, Chevrolet)."
+        unique: false
+        data_type: varchar
+
+      - name: model
+        expr: MODEL
+        description: "Vehicle model."
+        unique: false
+        data_type: varchar
+
+      - name: year
+        expr: YEAR
+        description: "Model year of the truck."
+        unique: false
+        data_type: number
+
+      - name: franchise_flag
+        expr: FRANCHISE_FLAG
+        description: "1 if the truck is franchised, 0 if company-owned."
+        unique: false
+        data_type: number
+
+      - name: ev_flag
+        expr: EV_FLAG
+        description: "1 if the truck is an electric vehicle, 0 otherwise."
+        unique: false
+        data_type: number
+
+    measures:
+      - name: truck_count
+        expr: TRUCK_ID
+        description: "Count of distinct trucks."
+        default_aggregation: count_distinct
+        data_type: number
+
+  # ── Dimension: LOCATION ──────────────────────────────────────────────────────
+  - name: location
+    description: "Physical locations (stops) where food trucks operate."
+    base_table:
+      database: TASTY_BYTES
+      schema: RAW_POS
+      table: LOCATION
+    primary_key:
+      columns:
+        - location_id
+
+    dimensions:
+      - name: location_id
+        expr: LOCATION_ID
+        description: "Unique location identifier."
+        unique: true
+        data_type: number
+
+      - name: location
+        expr: LOCATION
+        description: "Location name or address description."
+        unique: false
+        data_type: varchar
+
+      - name: city
+        expr: CITY
+        description: "City of the location."
+        unique: false
+        data_type: varchar
+
+      - name: region
+        expr: REGION
+        description: "State or region of the location."
+        unique: false
+        data_type: varchar
+
+      - name: country
+        expr: COUNTRY
+        description: "Country of the location."
+        unique: false
+        data_type: varchar
+
+      - name: iso_country_code
+        expr: ISO_COUNTRY_CODE
+        description: "ISO 3166-1 alpha-2 country code."
+        unique: false
+        data_type: varchar
+
+    measures:
+      - name: location_count
+        expr: LOCATION_ID
+        description: "Count of distinct locations."
+        default_aggregation: count_distinct
+        data_type: number
+
+  # ── Dimension: FRANCHISE ─────────────────────────────────────────────────────
+  - name: franchise
+    description: "Franchise owners who operate Tasty Bytes food trucks."
+    base_table:
+      database: TASTY_BYTES
+      schema: RAW_POS
+      table: FRANCHISE
+    primary_key:
+      columns:
+        - franchise_id
+
+    dimensions:
+      - name: franchise_id
+        expr: FRANCHISE_ID
+        description: "Unique franchise owner identifier."
+        unique: true
+        data_type: number
+
+      - name: first_name
+        expr: FIRST_NAME
+        description: "Franchise owner first name."
+        unique: false
+        data_type: varchar
+
+      - name: last_name
+        expr: LAST_NAME
+        description: "Franchise owner last name."
+        unique: false
+        data_type: varchar
+
+      - name: city
+        expr: CITY
+        description: "City where the franchise owner is based."
+        unique: false
+        data_type: varchar
+
+      - name: country
+        expr: COUNTRY
+        description: "Country where the franchise owner is based."
+        unique: false
+        data_type: varchar
+
+    measures:
+      - name: franchise_count
+        expr: FRANCHISE_ID
+        description: "Count of distinct franchise owners."
+        default_aggregation: count_distinct
+        data_type: number
+
+# ── Relationships ─────────────────────────────────────────────────────────────
+relationships:
+  - name: order_detail_to_order_header
+    left_table: order_detail
+    right_table: order_header
+    relationship_columns:
+      - left_column: order_id
+        right_column: order_id
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: order_detail_to_menu
+    left_table: order_detail
+    right_table: menu
+    relationship_columns:
+      - left_column: menu_item_id
+        right_column: menu_item_id
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: order_header_to_truck
+    left_table: order_header
+    right_table: truck
+    relationship_columns:
+      - left_column: truck_id
+        right_column: truck_id
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: order_header_to_location
+    left_table: order_header
+    right_table: location
+    relationship_columns:
+      - left_column: location_id
+        right_column: location_id
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: truck_to_franchise
+    left_table: truck
+    right_table: franchise
+    relationship_columns:
+      - left_column: franchise_id
+        right_column: franchise_id
+    join_type: left_outer
+    relationship_type: many_to_one
