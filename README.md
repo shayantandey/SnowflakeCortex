@@ -1,0 +1,2 @@
+# SnowflakeCortex
+Cortex Analyst
